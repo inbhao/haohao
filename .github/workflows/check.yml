@@ -1,4 +1,4 @@
-name: hao check
+name: VPN Gate Node Check
 
 on:
   workflow_dispatch:
@@ -28,20 +28,27 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Verify CHECK_WORKER secret is configured
+      - name: Verify required secrets are configured
+        shell: bash
         run: |
           if [ -z "$CHECK_WORKER" ]; then
-            echo "::error::请在仓库 Settings > Secrets and variables > Actions 中添加 CHECK_WORKER"
+            echo "::error::缺少 CHECK_WORKER Secret"
+            exit 1
+          fi
+          if [ -z "$NODES_FILENAME" ]; then
+            echo "::error::缺少 NODES_FILENAME Secret"
             exit 1
           fi
         env:
           CHECK_WORKER: ${{ secrets.CHECK_WORKER }}
+          NODES_FILENAME: ${{ secrets.NODES_FILENAME }}
 
       - name: Get VPN Gate nodes + check via Cloudflare Worker + build page
         run: python vpngate.py
         env:
           # 已部署的检测 Worker (不要改动: 检测统一走这里)
           CHECK_WORKER: ${{ secrets.CHECK_WORKER }}
+          NODES_FILENAME: ${{ secrets.NODES_FILENAME }}
           CHECK_CONCURRENCY: "32"
           CHECK_TIMEOUT: "90"
 

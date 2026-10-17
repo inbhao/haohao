@@ -8,7 +8,7 @@ VPN Gate SSTP 节点检测流水线 (精简版)
   3. 去重
   4. 并发调用检测 Worker
   5. 获取并合并优选域名与优选 API (Cloudflare 入口)
-  6. 生成 public/data.json + public/index.html + public/nodes.txt
+  6. 生成 public/data.json + public/index.html + 随机命名的节点文件
 """
 
 import base64
@@ -44,9 +44,9 @@ VPNGATE_MIRROR = os.environ.get(
 WORKER_CHECK_URL = os.environ.get("CHECK_WORKER", "").strip()
 if not WORKER_CHECK_URL:
     raise RuntimeError("缺少 CHECK_WORKER 环境变量，请在 GitHub Actions Secrets 中配置 CHECK_WORKER")
-CONCURRENCY = max(1, min(64, int(os.environ.get("CHECK_CONCURRENCY", "16"))))
-CHECK_TIMEOUT = max(3.0, float(os.environ.get("CHECK_TIMEOUT", "15")))
-MAX_CHECK_NODES = max(0, int(os.environ.get("MAX_CHECK_NODES", "100")))
+CONCURRENCY = max(1, int(os.environ.get("CHECK_CONCURRENCY", "32")))
+CHECK_TIMEOUT = float(os.environ.get("CHECK_TIMEOUT", "90"))
+MAX_CHECK_NODES = int(os.environ.get("MAX_CHECK_NODES", "0"))
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "60"))
 PUBLIC_DIR = os.environ.get("PUBLIC_DIR", os.path.join(REPO_DIR, "public"))
 TEMPLATE_HTML = os.path.join(REPO_DIR, "web", "index.html")
@@ -102,7 +102,12 @@ EDGE_HOSTS = [
 # 优选 API 地址配置 (支持逗号分隔多个，可配置在 GitHub Action Secret / Env 中)
 OPTIMAL_API = os.environ.get("OPTIMAL_API", "https://cf.090227.xyz/cmcc?ips=8&port=443,https://cf.090227.xyz/cu?port=443,https://cf.090227.xyz/ct?ips=6&port=443")
 
-NODES_URL = os.environ.get("NODES_URL", "https://inbhao.github.io/haohao/nodes.txt")
+# 文件名由 GitHub Actions Secret 注入；仅使用 basename，禁止路径穿越。
+NODES_FILENAME = os.environ.get("NODES_FILENAME", "").strip()
+if not NODES_FILENAME:
+    raise RuntimeError("缺少 NODES_FILENAME 环境变量，请在 GitHub Actions Secrets 中配置")
+if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{7,100}\.txt", NODES_FILENAME):
+    raise RuntimeError("NODES_FILENAME 格式无效：请使用 8-101 位字母、数字、点、下划线或连字符，并以 .txt 结尾")
 
 # ---------------------------------------------------------------------------
 # 日志
@@ -135,7 +140,7 @@ def fetch_vpngate():
             return rows, "vpngate.net/api/iphone"
         raise RuntimeError("官方 API 返回 0 行数据")
     except Exception as exc:
-        log("VPN GATE", f"官方 API 获取失败: {exc}")
+        log("VPN GATE", "官方 API 获取失败，异常详情已隐藏")
 
     try:
         log("VPN GATE", f"回退镜像: {VPNGATE_MIRROR}")
@@ -330,7 +335,7 @@ def classify_network(host, exit_org, is_datacenter=None):
     if re.match(r"^vpn\d{5,}", h) or re.match(r"^vpnv\d+", h): return "residential"
     return "unknown"
 
-def _check_one_once(node, session):
+def check_one(node, session):
     url = WORKER_CHECK_URL + quote(f"{node['host']}:{node['port']}", safe="")
     out = dict(node)
     out["protocol"] = "sstp"
@@ -351,6 +356,7 @@ def _check_one_once(node, session):
         out["status"] = "success" if ok else "failed"
         out["latency_ms"] = j.get("responseTime")
         out["colo"] = j.get("colo")
+        # 不把检测服务返回的原始错误写入公开 JSON，避免意外回显敏感信息。
         out["error"] = (None if ok else "check failed")
         exit_info = j.get("exit") or {}
         if exit_info:
@@ -375,17 +381,6 @@ def _check_one_once(node, session):
         out["error"] = "检测请求异常（详细信息已隐藏）"
         out["worker_error"] = True
         return out
-
-def check_one(node, session):
-    """检测一次；仅当 Worker/HTTP 请求异常时重试一次，不重试明确的节点检测失败。"""
-    result = _check_one_once(node, session)
-    if result.get("worker_error"):
-        time.sleep(0.5)
-        retry = _check_one_once(node, session)
-        if not retry.get("worker_error"):
-            retry["retried"] = True
-            return retry
-    return result
 
 def check_all(nodes, session):
     results = []
@@ -477,7 +472,7 @@ def write_outputs(data, edge_hosts):
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    nodes_path = os.path.join(PUBLIC_DIR, "nodes.txt")
+    nodes_path = os.path.join(PUBLIC_DIR, NODES_FILENAME)
     with open(nodes_path, "w", encoding="utf-8") as f:
         f.write(build_nodes_text(data, edge_hosts))
 
@@ -506,7 +501,7 @@ def main():
     log("VPN GATE", f"SSTP 节点: {sstp_count}")
     log("VPN GATE", f"去重后: {len(uniq)}")
 
-    log("CLOUDFLARE WORKER", f"提交检测: {len(uniq)} (并发 {CONCURRENCY}, 单请求超时 {CHECK_TIMEOUT}s, Worker 异常重试 1 次)")
+    log("CLOUDFLARE WORKER", f"提交检测: {len(uniq)} (并发 {CONCURRENCY}, 单请求超时 {CHECK_TIMEOUT}s)")
     t0 = time.time()
     results = check_all(uniq, session)
     elapsed = time.time() - t0
@@ -532,8 +527,8 @@ def main():
     data_path, html_path, nodes_path = write_outputs(data, edge_hosts)
     log("WEBSITE", f"生成 {os.path.relpath(data_path, REPO_DIR)}")
     log("WEBSITE", f"生成 {os.path.relpath(html_path, REPO_DIR)}")
-    log("WEBSITE", f"生成 {os.path.relpath(nodes_path, REPO_DIR)}")
-    log("USAGE", f"自动轮换: 把 {NODES_URL} 填入 edgetunnel 后台「自定义优选IP」框 (一次配置, 之后自动更新)")
+    # 不在 Actions 日志中打印私密文件名或完整访问地址。
+    log("WEBSITE", "已生成节点文件（文件名已隐藏）")
     log("WEBSITE", "完成 (GitHub Pages 部署由 workflow 执行)")
 
 if __name__ == "__main__":
@@ -542,4 +537,4 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception as exc:
-        die(f"程序异常: {type(exc).__name__}: {exc}")
+        die(f"程序异常: {type(exc).__name__}（详细信息已隐藏，避免意外输出敏感网址）")

@@ -90,19 +90,9 @@ EDGE_HOSTS = [
         "fbi.gov:443,www.sloomb.com:443,www.mfyx.cn:443,www.akasantech.com:443,"
         "www.giannidelprete.it:443,images.chesscomfiles.com:443,dynadot.com:443,www.shopify.com:443,"
         "constitution.congress.gov:443,auto.dolby.dpdns.org:443,101yaoye.com:443,tt.78607323.xyz:443,"
-        "fbi.gov:8443,www.speedtest.net:8443,www.shopify.com:8443,stores.staples.com:8443,"
-        "www.dbs.com.sg:8443,dynadot.com:8443,spring.io:8443,eii.at:8443,"
-        "login.rockwellautomation.com:8443,nodeloc.cc:8443,openai.com:8443,www.sloomb.com:8443,"
-        "saas.sin.fan:8443,www.udacity.com:8443,www.blibli.com:8443,www.carousell.sg:8443,"
-        "chrono24.com:8443,www.giannidelprete.it:8443,m.iyf.tv:8443,images.chesscomfiles.com:8443,"
-        "staticdelivery.nexusmods.com:8443,store.ubi.com:8443,www.deepl.com:8443,www.akasantech.com:8443,"
-        "guide.for.edu.sg:8443,cdn.7zz.cn:8443,api.gzcrtw.com:8443,duckybot.xyz:8443,"
-        "224322.xyz:8443,cf.468123.xyz:8443,cdn.cnno.de:8443,deepseek.com.hk:8443,"
-        "www.dbs.com.sg:2053,www.hypixel.net:2083,uspto.gov:8443,store.ubi.com:2053,"
-        "staticdelivery.nexusmods.com:2087,linear.app:2096,email.lg.com:2096,www.sloomb.com:8443,"
-        "chrono24.com:2087,www.leics.police.uk:2087,www.shopify.com:2096,www.sage.com:443,"
-        "dynadot.com:8443,www.blibli.com:2096,www.speedtest.net:2053,cdn.7zz.cn:2096,"
-        "auto.dolby.dpdns.org:443",
+        "www.trumpinternationalrealty.com:443,bbs.alipansou.com:443,eii.at:443,cdn.7zz.cn:443,"
+        "securecircle.com:443,stores.staples.com:443,themeisle.com:443,login.rockwellautomation.com:443,"
+        "linear.app:443,www.carousell.sg:443,224322.xyz:443,cdn.204910.best:443",
     ).split(",")
     if h.strip()
 ]

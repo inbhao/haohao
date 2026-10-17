@@ -1,4 +1,4 @@
-name: VPN Gate Node Check
+name: hao Check
 
 on:
   workflow_dispatch:
@@ -29,13 +29,14 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Verify required secrets are configured
+        shell: bash
         run: |
           if [ -z "$CHECK_WORKER" ]; then
-            echo "::error::请在仓库 Settings > Secrets and variables > Actions 中添加 CHECK_WORKER"
+            echo "::error::缺少 CHECK_WORKER Secret"
             exit 1
           fi
           if [ -z "$NODES_FILENAME" ]; then
-            echo "::error::请在仓库 Settings > Secrets and variables > Actions 中添加 NODES_FILENAME"
+            echo "::error::缺少 NODES_FILENAME Secret"
             exit 1
           fi
         env:
@@ -47,10 +48,9 @@ jobs:
         env:
           # 已部署的检测 Worker (不要改动: 检测统一走这里)
           CHECK_WORKER: ${{ secrets.CHECK_WORKER }}
-          CHECK_CONCURRENCY: "16"
-          CHECK_TIMEOUT: "15"
-          MAX_CHECK_NODES: "100"
           NODES_FILENAME: ${{ secrets.NODES_FILENAME }}
+          CHECK_CONCURRENCY: "32"
+          CHECK_TIMEOUT: "90"
 
       - name: Ensure GitHub Pages is enabled (one-time auto setup)
         run: |
